@@ -1,0 +1,82 @@
+export type Role = 
+  | 'Doctor' 
+  | 'Nurse' 
+  | 'Receptionist' 
+  | 'Cashier' 
+  | 'HR' 
+  | 'Manager' 
+  | 'ITAdmin' 
+  | 'SecurityAdmin';
+
+export type Branch = 'CN_HN' | 'CN_HCM';
+
+export type Department = 
+  | 'Khoa_Noi' 
+  | 'Khoa_Ngoai' 
+  | 'Phong_TiepDon' // Reception
+  | 'Phong_TaiChinh' // Finance
+  | 'Phong_NhanSu' // HR
+  | 'IT' 
+  | 'Security';
+
+export type Seniority = 'Junior' | 'Senior' | 'Intern' | 'Lead' | 'Head';
+export type LicenseStatus = 'Yes' | 'No';
+
+export interface UserProfile {
+  accessToken: string;
+  tokenType: string;
+  userId: string;
+  username: string;
+  role: Role;
+  department: Department;
+  branch: Branch;
+  seniority: Seniority; 
+  license: LicenseStatus;
+  permissions: string[]; 
+}
+
+export interface PermissionGroup {
+  resource: string;
+  actions: string[];
+}
+
+export interface AccessLog {
+  id: string;
+  timestamp: Date;
+  resource: string;
+  action: string;
+  status: 'Allowed' | 'Denied';
+  riskScore?: number;
+  denyReason?: string;
+}
+
+// --- API DTOs ---
+
+export interface LoginResponse {
+  success: boolean;
+  data: {
+    accessToken: string;
+    tokenType: string;
+    expiresIn: number;
+    userId: string;
+    username: string;
+    role: Role;
+    department: Department;
+    branch: Branch;
+  }
+}
+
+export interface AuthorizationCheckRequest {
+  resourceType: string;
+  action: string;
+  resourceBranch?: string;
+  patientId?: string;
+}
+
+export interface AuthorizationCheckResponse {
+  allowed: boolean;
+  policyId: string;
+  denyReasons: string[];
+  obligations: string[];
+  riskScore: number;
+}

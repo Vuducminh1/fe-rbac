@@ -1,0 +1,5 @@
+{
+  "name": "Policy - Hospital IAM",
+  "description": "A robust Identity and Access Management system for hospital staff, visualizing roles, attributes, and dynamic permissions based on branch and department policies.",
+  "requestFramePermissions": []
+}
