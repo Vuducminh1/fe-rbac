@@ -1,152 +1,239 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { UserProfile } from '../types';
-import { Server, Loader2, AlertTriangle, RefreshCw, Play } from 'lucide-react';
+import { Server, Loader2, AlertTriangle } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { emrService } from '../services/emrService';
+import { api } from '../services/apiClient';
 
 interface AccessSimulatorProps {
   user: UserProfile;
 }
 
-/** Backend response shape (based on what you pasted) */
-interface ResourceTypesApiResponse {
-  success: boolean;
-  message: string;
-  data: {
-    resourceTypes: Record<string, string>; // slug -> "WorkSchedule"
-    usage?: Record<string, string>;
-    totalTypes?: number;
-  };
-  timestamp?: string;
-}
+type TypesPayload = {
+  resourceTypes: Record<string, string>;
+  usage: Record<string, string>;
+  totalTypes?: number;
+};
 
-interface EndpointDef {
-  action: string; // read/create/update/...
-  method: string; // GET/POST/PUT/DELETE
+type EndpointAction = 'readById' | 'create' | 'update' | 'delete' | 'action';
+
+type EndpointDef = {
+  action: EndpointAction;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   label: string;
   desc: string;
-}
+  path: string; // contains /api/v2/mock/{slug}/{id}...
+};
 
-interface ResourceCard {
-  slug: string;        // "schedule"
-  displayName: string; // "WorkSchedule"  ✅ show on UI
-  // endpoints will be fetched later by calling API riêng
-  endpoints?: EndpointDef[];
-  endpointsLoading?: boolean;
-  endpointsError?: string | null;
-  expanded?: boolean;
-}
+type ResourceCard = {
+  slug: string;
+  displayName: string;
+  endpoints: EndpointDef[];
+};
+
+type CallState = {
+  loading?: boolean;
+  ok?: boolean;
+  status?: number;
+  message?: string;
+  dataPreview?: string;
+};
+
+const buildEndpoints = (slug: string, displayName: string, usage: Record<string, string>): EndpointDef[] => {
+  const replaceTemplate = (tpl: string) =>
+    tpl
+      .replace('{resourceType}', slug)
+      .replace('{id}', '{id}')
+      .replace('{action}', '{action}');
+
+  const list: EndpointDef[] = [];
+
+  // ✅ (mày đã yêu cầu bỏ GET ALL nên không có nữa)
+
+  if (usage.getById) {
+    list.push({
+      action: 'readById',
+      method: 'GET',
+      label: `Get ${displayName} by id`,
+      desc: replaceTemplate(usage.getById),
+      path: `/api/v2/mock/{id}`,
+    });
+  }
+
+  list.push({
+    action: 'create',
+    method: 'POST',
+    label: `Create ${displayName}`,
+    desc: replaceTemplate(usage.create || 'POST /api/v2/mock/{resourceType}'),
+    path: `/api/v2/mock/${slug}`,
+  });
+
+  list.push({
+    action: 'update',
+    method: 'PUT',
+    label: `Update ${displayName}`,
+    desc: replaceTemplate(usage.update || 'PUT /api/v2/mock/{resourceType}/{id}'),
+    path: `/api/v2/mock/${slug}/{id}`,
+  });
+
+  list.push({
+    action: 'delete',
+    method: 'DELETE',
+    label: `Delete ${displayName}`,
+    desc: replaceTemplate(usage.delete || 'DELETE /api/v2/mock/{resourceType}/{id}'),
+    path: `/api/v2/mock/${slug}/{id}`,
+  });
+
+  if (usage.action) {
+    list.push({
+      action: 'action',
+      method: 'POST',
+      label: `Action on ${displayName}`,
+      desc: replaceTemplate(usage.action),
+      path: `/api/v2/mock/${slug}/{id}/{action}`,
+    });
+  }
+
+  return list;
+};
+
+const getMethodBadgeClass = (method: string) => {
+  switch (method) {
+    case 'GET':
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800';
+    case 'POST':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
+    case 'PUT':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+    case 'DELETE':
+      return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-800';
+    default:
+      return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+  }
+};
 
 const AccessSimulator: React.FC<AccessSimulatorProps> = ({ user }) => {
   const { t } = useAppContext();
 
-  const [resources, setResources] = useState<ResourceCard[]>([]);
+  const [typesPayload, setTypesPayload] = useState<TypesPayload | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
 
+  // inputs for running endpoints that need id/action
+  const [idBySlug, setIdBySlug] = useState<Record<string, string>>({});
+  const [actionBySlug, setActionBySlug] = useState<Record<string, string>>({});
+  const [callState, setCallState] = useState<Record<string, CallState>>({}); // key: `${slug}_${idx}`
+
   useEffect(() => {
-  const fetchResourceTypes = async () => {
-    try {
-      setConfigLoading(true);
-      setConfigError(null);
+    let cancelled = false;
 
-      const raw = await emrService.meta.getResourceTypes();
-
-      const payload = (raw as any)?.data ? (raw as any).data : raw;
-
-      const resourceTypes = (payload as any)?.resourceTypes;
-
-      console.log("RAW:", raw);
-      console.log("PAYLOAD:", payload);
-      console.log("resourceTypes:", resourceTypes);
-
-      if (!resourceTypes || typeof resourceTypes !== "object") {
-        throw new Error("Invalid response: data.resourceTypes not found");
-      }
-
-      const arr = Object.entries(resourceTypes)
-        .map(([slug, displayName]) => ({
-          slug,
-          displayName: String(displayName),
-          expanded: false,
-          endpoints: undefined,
-          endpointsLoading: false,
-          endpointsError: null,
-        }))
-        .sort((a, b) => a.displayName.localeCompare(b.displayName));
-
-      setResources(arr);
-    } catch (e: any) {
-      console.error("getResourceTypes failed:", e);
-      // nếu axios: e.response?.status, e.response?.data sẽ có
-      setConfigError(
-        `Failed to load resource types. ${
-          e?.response?.status ? `HTTP ${e.response.status}` : ""
-        }`
-      );
-    } finally {
-      setConfigLoading(false);
-    }
-  };
-
-  fetchResourceTypes();
-}, []);
-
-
-  /**
-   * TODO: bạn thay phần call API thật vào đây.
-   * Ví dụ backend của bạn có endpoint:
-   *  GET /api/v2/meta/resources/{slug}/endpoints
-   * hoặc GET /api/v2/meta/endpoints?resourceType=schedule
-   */
-  const fetchEndpointsFor = async (slug: string): Promise<EndpointDef[]> => {
-    // ví dụ minh hoạ: bạn thay bằng service thật
-    // return await emrService.meta.getEndpointsByResourceType(slug);
-
-    // tạm thời return rỗng để chỉ hiển thị resource types
-    return [];
-  };
-
-  const toggleResource = async (slug: string) => {
-    setResources(prev =>
-      prev.map(r => (r.slug === slug ? { ...r, expanded: !r.expanded } : r))
-    );
-
-    // Nếu vừa expand và chưa load endpoints => call API riêng
-    const current = resources.find(r => r.slug === slug);
-    const willExpand = current ? !current.expanded : true;
-    const notLoadedYet = current && current.endpoints === undefined;
-
-    if (willExpand && notLoadedYet) {
-      setResources(prev =>
-        prev.map(r =>
-          r.slug === slug ? { ...r, endpointsLoading: true, endpointsError: null } : r
-        )
-      );
-
+    const fetchResourceTypes = async () => {
       try {
-        const eps = await fetchEndpointsFor(slug);
-        setResources(prev =>
-          prev.map(r =>
-            r.slug === slug ? { ...r, endpoints: eps, endpointsLoading: false } : r
-          )
-        );
+        setConfigLoading(true);
+        setConfigError(null);
+
+        const p = await emrService.meta.getResourceTypes();
+        if (!p || typeof p !== 'object') throw new Error('Invalid response');
+        if (!('resourceTypes' in p) || typeof (p as any).resourceTypes !== 'object') throw new Error('resourceTypes missing');
+        if (!('usage' in p) || typeof (p as any).usage !== 'object') throw new Error('usage missing');
+
+        if (!cancelled) setTypesPayload(p as TypesPayload);
       } catch (e) {
-        console.error(e);
-        setResources(prev =>
-          prev.map(r =>
-            r.slug === slug
-              ? { ...r, endpointsLoading: false, endpointsError: 'Failed to load endpoints' }
-              : r
-          )
-        );
+        console.error('getResourceTypes failed:', e);
+        if (!cancelled) setConfigError('Failed to load resource types from server.');
+      } finally {
+        if (!cancelled) setConfigLoading(false);
       }
+    };
+
+    fetchResourceTypes();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const resources: ResourceCard[] = useMemo(() => {
+    if (!typesPayload) return [];
+    const { resourceTypes, usage } = typesPayload;
+
+    return Object.entries(resourceTypes)
+      .map(([slug, displayName]) => ({
+        slug,
+        displayName: String(displayName),
+        endpoints: buildEndpoints(slug, String(displayName), usage),
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [typesPayload]);
+
+  const resolvePath = (tplPath: string, slug: string) => {
+    const id = idBySlug[slug] || '';
+    const act = actionBySlug[slug] || '';
+    return tplPath.replace('{id}', id).replace('{action}', act);
+  };
+
+  const runEndpoint = async (slug: string, ep: EndpointDef, idx: number) => {
+    const key = `${slug}_${idx}`;
+    const url = resolvePath(ep.path, slug);
+
+    // validate required params
+    if (ep.path.includes('{id}') && !idBySlug[slug]) {
+      setCallState(prev => ({
+        ...prev,
+        [key]: { ok: false, message: 'Missing id. Fill ID first.' },
+      }));
+      return;
+    }
+    if (ep.path.includes('{action}') && !actionBySlug[slug]) {
+      setCallState(prev => ({
+        ...prev,
+        [key]: { ok: false, message: 'Missing action. Fill Action first.' },
+      }));
+      return;
+    }
+
+    setCallState(prev => ({ ...prev, [key]: { loading: true } }));
+
+    try {
+      let res: any;
+
+      // apiClient unwraps data, but still throws on non-2xx
+      if (ep.method === 'GET') {
+        res = await api.get<any>(url);
+      } else if (ep.method === 'POST') {
+        res = await api.post<any>(url, {}); // create/action (body optional)
+      } else if (ep.method === 'PUT') {
+        res = await api.put<any>(url, {});  // update (demo empty body)
+      } else {
+        res = await api.delete<any>(url);
+      }
+
+      const preview = JSON.stringify(res, null, 2);
+      setCallState(prev => ({
+        ...prev,
+        [key]: {
+          loading: false,
+          ok: true,
+          message: 'OK',
+          dataPreview: preview.length > 900 ? preview.slice(0, 900) + '\n...' : preview,
+        },
+      }));
+    } catch (e: any) {
+      const msg = e?.message || 'Request failed';
+      const status = e?.status;
+      setCallState(prev => ({
+        ...prev,
+        [key]: {
+          loading: false,
+          ok: false,
+          status,
+          message: status ? `HTTP ${status}: ${msg}` : msg,
+        },
+      }));
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex justify-between items-center transition-colors">
         <div>
           <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -154,7 +241,7 @@ const AccessSimulator: React.FC<AccessSimulatorProps> = ({ user }) => {
             {t('simulator_console')}
           </h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            Display supported resource types. Endpoints are loaded per resource via separate APIs.
+            Click method badges to call backend APIs.
           </p>
         </div>
         <div className="text-xs text-slate-400">
@@ -162,7 +249,6 @@ const AccessSimulator: React.FC<AccessSimulatorProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Loading */}
       {configLoading && (
         <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
           <Loader2 size={32} className="animate-spin text-teal-600 mb-4" />
@@ -170,7 +256,6 @@ const AccessSimulator: React.FC<AccessSimulatorProps> = ({ user }) => {
         </div>
       )}
 
-      {/* Error */}
       {!configLoading && configError && (
         <div className="flex flex-col items-center justify-center py-16 bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-100 dark:border-red-900/30">
           <AlertTriangle size={32} className="text-red-500 mb-2" />
@@ -179,7 +264,6 @@ const AccessSimulator: React.FC<AccessSimulatorProps> = ({ user }) => {
         </div>
       )}
 
-      {/* Grid */}
       {!configLoading && !configError && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {resources.map(r => (
@@ -187,84 +271,83 @@ const AccessSimulator: React.FC<AccessSimulatorProps> = ({ user }) => {
               key={r.slug}
               className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-colors"
             >
-              <div className="px-6 py-4 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
-                {/* ✅ chỗ bạn cần: hiển thị WorkSchedule */}
-                <h3 className="font-semibold text-slate-700 dark:text-slate-200">
-                  {r.displayName}
-                </h3>
-
-                <div className="flex items-center gap-3">
+              <div className="px-6 py-4 bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-700 dark:text-slate-200">{r.displayName}</h3>
                   <span className="text-xs font-mono text-slate-400">{r.slug}</span>
+                </div>
 
-                  <button
-                    onClick={() => toggleResource(r.slug)}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 text-white hover:bg-slate-700 active:scale-95 transition-all"
-                    title="Load endpoints (from separate API)"
-                  >
-                    {r.endpointsLoading ? (
-                      <>
-                        <RefreshCw size={14} className="animate-spin" />
-                        Loading
-                      </>
-                    ) : (
-                      <>
-                        <Play size={14} fill="currentColor" />
-                        {r.expanded ? 'Hide' : 'Load'} endpoints
-                      </>
-                    )}
-                  </button>
+                {/* inputs for ID + Action */}
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <input
+                    value={idBySlug[r.slug] || ''}
+                    onChange={(e) => setIdBySlug(prev => ({ ...prev, [r.slug]: e.target.value }))}
+                    placeholder="ID (e.g. POL001)"
+                    className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 outline-none"
+                  />
+                  <input
+                    value={actionBySlug[r.slug] || ''}
+                    onChange={(e) => setActionBySlug(prev => ({ ...prev, [r.slug]: e.target.value }))}
+                    placeholder="Action (e.g. approve)"
+                    className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 outline-none"
+                  />
                 </div>
               </div>
 
-              {/* Endpoints (loaded separately) */}
-              {r.expanded && (
-                <div className="p-4">
-                  {r.endpointsLoading && (
-                    <div className="text-sm text-slate-500 flex items-center gap-2">
-                      <Loader2 size={16} className="animate-spin" />
-                      Loading endpoints...
-                    </div>
-                  )}
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {r.endpoints.map((ep, idx) => {
+                  const key = `${r.slug}_${idx}`;
+                  const st = callState[key];
+                  const resolved = resolvePath(ep.path, r.slug);
 
-                  {!r.endpointsLoading && r.endpointsError && (
-                    <div className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
-                      <AlertTriangle size={16} />
-                      {r.endpointsError}
-                    </div>
-                  )}
+                  return (
+                    <div key={key} className="p-4 flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* ✅ badge is now a real button */}
+                        <button
+                          type="button"
+                          onClick={() => runEndpoint(r.slug, ep, idx)}
+                          disabled={!!st?.loading}
+                          className={`w-16 text-center text-[10px] font-bold px-2 py-1 rounded border transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed ${getMethodBadgeClass(ep.method)}`}
+                          title={`Call ${resolved}`}
+                        >
+                          {st?.loading ? '...' : ep.method}
+                        </button>
 
-                  {!r.endpointsLoading && !r.endpointsError && (
-                    <>
-                      {Array.isArray(r.endpoints) && r.endpoints.length > 0 ? (
-                        <div className="space-y-2">
-                          {r.endpoints.map((ep, idx) => (
+                        <div className="min-w-0">
+                          <div className="text-sm font-mono text-slate-800 dark:text-slate-200 truncate">
+                            {ep.label}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                            {ep.desc}
+                          </div>
+
+                          {/* result */}
+                          {st?.message && (
                             <div
-                              key={`${r.slug}_${idx}`}
-                              className="flex items-center justify-between p-2 rounded-lg border border-slate-200 dark:border-slate-800"
+                              className={`mt-2 text-xs font-mono ${
+                                st.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+                              }`}
                             >
-                              <div className="min-w-0">
-                                <div className="text-sm font-mono text-slate-700 dark:text-slate-200 truncate">
-                                  {ep.label}
-                                </div>
-                                <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                  {ep.desc}
-                                </div>
-                              </div>
-                              <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                                {ep.method} · {ep.action}
-                              </div>
+                              {st.message}
                             </div>
-                          ))}
+                          )}
+
+                          {st?.dataPreview && (
+                            <pre className="mt-2 text-[11px] bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-2 overflow-auto max-h-40">
+                              {st.dataPreview}
+                            </pre>
+                          )}
                         </div>
-                      ) : (
-                        <div className="text-sm text-slate-400 italic">
-                          No endpoints loaded (or endpoint API not wired yet).
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
+                      </div>
+
+                      <div className="text-xs font-mono text-slate-400 whitespace-nowrap">
+                        {resolved}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>
