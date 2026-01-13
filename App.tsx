@@ -62,7 +62,7 @@ const AppContent: React.FC = () => {
                 />
              </div>
           </div>
-          <PermissionList permissions={user.permissions} filter={policyFilter} />
+          <PermissionList filter={policyFilter} />
         </div>
       )}
 

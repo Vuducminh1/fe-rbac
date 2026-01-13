@@ -159,3 +159,5 @@ export const getStoredUser = (): UserProfile | null => {
     return null;
   }
 };
+
+export const getMe = () => api.get<UserProfile>('/api/auth/me');
