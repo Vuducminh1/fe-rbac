@@ -52,6 +52,11 @@ export interface BackendUser {
   enabled: boolean;
   accountNonLocked: boolean;
   permissions: Record<string, string>; // e.g. "MedicalRecord": "create,read"
+  // Added fields for stats mapping
+  assignedPatientsCount?: number;
+  rolePermissionsCount?: number;
+  additionalPermissionsCount?: number;
+  pendingPermissionsCount?: number;
 }
 
 export interface AdminUserListResponse {
@@ -72,6 +77,34 @@ export interface AccessLog {
   status: 'Allowed' | 'Denied';
   riskScore?: number;
   denyReason?: string;
+}
+
+// --- Pending Permissions DTOs ---
+
+export interface PendingPermissionRequest {
+  id: number;
+  userId: string;
+  userDbId: number;
+  username: string;
+  userRole: string;
+  department: string;
+  branch: string;
+  permissionId: number;
+  permissionKey: string;
+  resourceType: string;
+  action: string;
+  confidence: number;
+  requestType: 'NEW_USER' | 'JOB_TRANSFER';
+  changeType: 'ADD' | 'REMOVE';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requestedAt: string;
+}
+
+export interface PermissionStats {
+  pending: number;
+  approved: number;
+  rejected: number;
+  total: number;
 }
 
 // --- API DTOs ---
