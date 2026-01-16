@@ -8,6 +8,7 @@ import { UserProfile } from './types';
 import { Search } from 'lucide-react';
 import { AppProvider, useAppContext } from './contexts/AppContext';
 import { getStoredUser, logout } from './services/authService';
+import AdminPanel from './components/AdminPanel';
 
 const AppContent: React.FC = () => {
   // Initialize state from LocalStorage to restore session on reload
@@ -75,6 +76,11 @@ const AppContent: React.FC = () => {
           <AccessSimulator user={user} />
         </div>
       )}
+      {activeTab === 'admin' && (
+  <div className="animate-fadeIn">
+    <AdminPanel />
+  </div>
+)}
     </Layout>
   );
 };

@@ -21,7 +21,10 @@ const getHeaders = (token?: string) => {
 async function request<T>(endpoint: string, config: RequestInit = {}): Promise<T> {
   // Get token from local storage or memory if needed. 
   // For this architecture, we pass the token usually, but here's a simple retrieval if stored
-  const token = localStorage.getItem('accessToken');
+  const token =
+  localStorage.getItem('accessToken') ||
+  localStorage.getItem('token') ||
+  localStorage.getItem('authToken');
   
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...config,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserProfile } from '../types';
-import { LogOut, Shield, User, LayoutDashboard, FileKey, Eye, Sun, Moon, Globe } from 'lucide-react';
+import { LogOut, Shield, User, LayoutDashboard, FileKey, Eye, Sun, Moon, Globe, Settings } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 
 interface LayoutProps {
@@ -13,6 +13,12 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, setActiveTab }) => {
   const { theme, toggleTheme, language, setLanguage, t } = useAppContext();
+  
+  // Robust check for admin privileges
+  const isAdmin = 
+    user.role === 'SecurityAdmin' || 
+    user.role === 'ITAdmin' || 
+    user.username.toLowerCase() === 'admin';
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -73,6 +79,20 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, se
             <Eye size={20} />
             <span className="font-medium text-sm">{t('access_simulator')}</span>
           </button>
+
+          {isAdmin && (
+            <button
+                onClick={() => setActiveTab('admin')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 ${
+                activeTab === 'admin'
+                    ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/20 dark:shadow-teal-900/50'
+                    : 'hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+            >
+                <Settings size={20} />
+                <span className="font-medium text-sm">{t('admin_panel')}</span>
+            </button>
+          )}
         </nav>
 
         <div className="p-4 border-t border-slate-200 dark:border-slate-800 transition-colors duration-300">

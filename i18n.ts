@@ -1,3 +1,4 @@
+
 export const translations = {
   en: {
     app_name: "Policy - Hospital IAM",
@@ -11,6 +12,7 @@ export const translations = {
     overview: "Overview",
     my_policies: "My Policies",
     access_simulator: "Access Simulator",
+    admin_panel: "Admin Panel",
     sign_out: "Sign Out",
     // Header
     secure_connection: "Secure Connection",
@@ -58,7 +60,14 @@ export const translations = {
     request: "Request",
     result: "Result",
     allowed: "Allowed",
-    denied: "Denied"
+    denied: "Denied",
+    // Admin
+    admin_subtitle: "Manage users, roles, and granular permissions.",
+    add_user: "Add User",
+    search_users: "Search users by name, role, or ID...",
+    confirm_delete: "Are you sure you want to delete this user?",
+    create_user: "Create New User",
+    edit_user: "Edit User",
   },
   vi: {
     app_name: "Policy - IAM Bệnh viện",
@@ -72,6 +81,7 @@ export const translations = {
     overview: "Tổng quan",
     my_policies: "Chính sách của tôi",
     access_simulator: "Mô phỏng truy cập",
+    admin_panel: "Quản trị Hệ thống",
     sign_out: "Đăng xuất",
     // Header
     secure_connection: "Kết nối An toàn",
@@ -119,6 +129,13 @@ export const translations = {
     request: "Yêu cầu",
     result: "Kết quả",
     allowed: "Cho phép",
-    denied: "Từ chối"
+    denied: "Từ chối",
+    // Admin
+    admin_subtitle: "Quản lý người dùng, vai trò và phân quyền chi tiết.",
+    add_user: "Thêm Người dùng",
+    search_users: "Tìm kiếm theo tên, vai trò hoặc ID...",
+    confirm_delete: "Bạn có chắc chắn muốn xóa người dùng này?",
+    create_user: "Tạo Người dùng Mới",
+    edit_user: "Chỉnh sửa Người dùng",
   }
 };

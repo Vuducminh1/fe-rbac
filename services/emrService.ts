@@ -3,6 +3,7 @@ import {
   AuthorizationCheckRequest,
   AuthorizationCheckResponse,
   UserProfile,
+  AdminUserListResponse
 } from '../types';
 
 type TypesPayload = {
@@ -41,7 +42,7 @@ export const emrService = {
   },
 
   users: {
-    getAll: () => api.get('/api/users'),
+    getAll: () => api.get<AdminUserListResponse>('/api/users/admin/all'),
     getById: (userId: string) => api.get(`/api/users/${encodeURIComponent(userId)}`),
     getByDepartment: (dept: string) => api.get(`/api/users/department/${encodeURIComponent(dept)}`),
     getByBranch: (branch: string) => api.get(`/api/users/branch/${encodeURIComponent(branch)}`),

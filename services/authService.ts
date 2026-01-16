@@ -86,77 +86,77 @@ const MOCK_USERS_DB: Record<string, { role: Role, branch: Branch, dept: Departme
 };
 
 export const login = async (username: string, password: string): Promise<UserProfile> => {
-  let userProfile: UserProfile;
+    let userProfile: UserProfile;
 
-  try {
-    // 1. Try Real API
+    try {
+      // 1. Try Real API
     const response = await api.post<any>('/api/auth/login', { username, password });
-    const apiUser = response;
-    
-    // Adapt Backend Response to Frontend UserProfile
-    userProfile = {
-      accessToken: apiUser.accessToken,
-      tokenType: apiUser.tokenType,
-      userId: apiUser.userId,
-      username: apiUser.username,
-      role: apiUser.role,
-      department: apiUser.department,
-      branch: apiUser.branch,
-      seniority: 'Senior', // Defaulting as BE might not return this yet
-      license: (apiUser.role === 'Doctor' || apiUser.role === 'Nurse') ? 'Yes' : 'No',
-      permissions: ROLE_PERMISSIONS[apiUser.role as Role] || []
-    };
+      const apiUser = response;
+      
+      // Adapt Backend Response to Frontend UserProfile
+      userProfile = {
+        accessToken: apiUser.accessToken,
+        tokenType: apiUser.tokenType,
+        userId: apiUser.userId,
+        username: apiUser.username,
+        role: apiUser.role,
+        department: apiUser.department,
+        branch: apiUser.branch,
+        seniority: 'Senior', // Defaulting as BE might not return this yet
+        license: (apiUser.role === 'Doctor' || apiUser.role === 'Nurse') ? 'Yes' : 'No',
+        permissions: ROLE_PERMISSIONS[apiUser.role as Role] || []
+      };
 
-  } catch (error: any) {
-    console.warn("Backend API not reachable or failed, falling back to Mock Data.", error);
-    
-    // 2. Fallback to Mock Data
-    await new Promise(resolve => setTimeout(resolve, 600)); // Simulate network delay
+    } catch (error: any) {
+      console.warn("Backend API not reachable or failed, falling back to Mock Data.", error);
+      
+      // 2. Fallback to Mock Data
+      await new Promise(resolve => setTimeout(resolve, 600)); // Simulate network delay
     const userConf = MOCK_USERS_DB[username];
-    
-    if (!userConf) {
-      throw new Error("User not found (Mock)");
+      
+      if (!userConf) {
+        throw new Error("User not found (Mock)");
+      }
+
+      userProfile = {
+        accessToken: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${btoa(username)}.${Date.now()}`,
+        tokenType: 'Bearer',
+        userId: username.toUpperCase(),
+        username: username,
+        role: userConf.role,
+        department: userConf.dept,
+        branch: userConf.branch,
+        seniority: userConf.seniority,
+        license: userConf.role === 'Doctor' || userConf.role === 'Nurse' ? 'Yes' : 'No',
+        permissions: ROLE_PERMISSIONS[userConf.role] || []
+      };
     }
 
-    userProfile = {
-      accessToken: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${btoa(username)}.${Date.now()}`,
-      tokenType: 'Bearer',
-      userId: username.toUpperCase(),
-      username: username,
-      role: userConf.role,
-      department: userConf.dept,
-      branch: userConf.branch,
-      seniority: userConf.seniority,
-      license: userConf.role === 'Doctor' || userConf.role === 'Nurse' ? 'Yes' : 'No',
-      permissions: ROLE_PERMISSIONS[userConf.role] || []
-    };
-  }
+    // Persist Session to LocalStorage
+    localStorage.setItem(TOKEN_KEY, userProfile.accessToken);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(userProfile));
 
-  // Persist Session to LocalStorage
-  localStorage.setItem(TOKEN_KEY, userProfile.accessToken);
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(userProfile));
-
-  return userProfile;
+    return userProfile;
 };
 
 export const logout = async () => {
-    try {
-        await api.post('/api/auth/logout', {});
-    } catch (e) {
-        // Ignore error on logout
-    }
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(PROFILE_KEY);
+      try {
+          await api.post('/api/auth/logout', {});
+      } catch (e) {
+          // Ignore error on logout
+      }
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(PROFILE_KEY);
 };
 
 export const getStoredUser = (): UserProfile | null => {
-  try {
-    const storedProfile = localStorage.getItem(PROFILE_KEY);
-    if (!storedProfile) return null;
-    return JSON.parse(storedProfile);
-  } catch (error) {
-    console.error("Failed to parse stored user profile", error);
-    return null;
+    try {
+      const storedProfile = localStorage.getItem(PROFILE_KEY);
+      if (!storedProfile) return null;
+      return JSON.parse(storedProfile);
+    } catch (error) {
+      console.error("Failed to parse stored user profile", error);
+      return null;
   }
 };
 

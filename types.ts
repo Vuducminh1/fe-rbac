@@ -1,3 +1,4 @@
+
 export type Role = 
   | 'Doctor' 
   | 'Nurse' 
@@ -19,7 +20,7 @@ export type Department =
   | 'IT' 
   | 'Security';
 
-export type Seniority = 'Junior' | 'Senior' | 'Intern' | 'Lead' | 'Head';
+export type Seniority = 'Junior' | 'Senior' | 'Intern' | 'Lead' | 'Head' | 'Mid'; // Added Mid based on JSON
 export type LicenseStatus = 'Yes' | 'No';
 
 export interface UserProfile {
@@ -33,6 +34,29 @@ export interface UserProfile {
   seniority: Seniority; 
   license: LicenseStatus;
   permissions: string[]; 
+}
+
+// --- Backend DTOs based on provided JSON ---
+export interface BackendUser {
+  id: number;
+  userId: string;
+  username: string;
+  email: string;
+  role: Role;
+  department: Department;
+  branch: Branch;
+  position: string;
+  hasLicense: boolean;
+  seniority: Seniority;
+  employmentType: string;
+  enabled: boolean;
+  accountNonLocked: boolean;
+  permissions: Record<string, string>; // e.g. "MedicalRecord": "create,read"
+}
+
+export interface AdminUserListResponse {
+  users: BackendUser[];
+  statistics: any;
 }
 
 export interface PermissionGroup {
